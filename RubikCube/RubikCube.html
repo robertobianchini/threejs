@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Rubik's Cube Teste</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body { background-color : #000000; overflow : hidden; font-family : Monospace; color : white }
+        </style>
+        <script type="text/javascript" src="../../../libs/threejs/three.min.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script type="text/javascript" src="../../../libs/threejs/Dector.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/stats.min.js"></script>        
+    </head>
+    <body>
+
+        <script type="text/javascript">
+            var container, stats;
+            var scene, renderer;
+            var camera, cameraControl;
+
+
+            var CUBE_SIDE   = 2.9;
+            var CUBE_OFFSET = 0.005;
+
+            initializeScene();
+            animateScene();             
+
+
+            function initializeScene() {
+                // Page Infrastructure and Info
+                container = document.createElement("div");
+                document.body.appendChild(container);
+
+                var info             = document.createElement("div");
+                info.style.position  = "absolute";
+                info.style.top       = "10px";
+                info.style.width     = "100%";
+                info.style.textAlign = "center";
+                info.innerHTML       = 'Rubik\' Cube made with <a href="http://mrdoob.github.io/three.js/">ThreeJS</a>. Use mouse to play and change the view <a href="http://mindgear.cc">mindgear</a>.';
+                container.appendChild( info );
+
+                // Check if WebGL is present and set the Render Properties
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x000000, 1);
+
+                canvasWidth  = window.innerWidth;
+                canvasHeight = window.innerHeight;
+ 
+                renderer.setSize(canvasWidth, canvasHeight);
+                container.appendChild(renderer.domElement);
+ 
+                // ThreeJS Scene and Camera
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 1, 10000);
+                camera.position.y = 20;
+                camera.position.z = 20;
+                camera.lookAt(scene.position);
+                scene.add(camera);
+
+                // WebGL Info
+                stats                           = new Stats();
+                stats.domElement.style.position = "absolute";
+                stats.domElement.style.top      = "0px";
+                container.appendChild(stats.domElement);                
+
+                // Interaction and the real content of the scene
+                createInteraction();
+                createContent()
+            }
+
+
+            function createInteraction() {
+                // Camera Interaction
+                cameraControl                      = new THREE.TrackballControls(camera);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                window.addEventListener("resize", onWindowResize, false);
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function createContent() {
+               for (var x = 0; x < 3; x++) {
+                    for (var y = 0; y < 3; y++) {
+                        for (var z = 0; z < 3; z++) {
+                            scene.add(new RubnickCell(x * 3 - 3, y * 3, z * 3 - 3));
+                        }
+                    }
+                }
+            }
+
+
+            function animateScene() {
+                requestAnimationFrame(animateScene);
+                renderScene();
+            }
+
+
+            function renderScene() { 
+                cameraControl.update();
+                renderer.render(scene, camera); 
+            }
+
+
+            function RubnickCell(x, y, z) {
+                var cubeMaterial = new THREE.MeshBasicMaterial({color: 0x222222});
+                var cubeGeom     = new THREE.CubeGeometry(CUBE_SIDE, CUBE_SIDE, CUBE_SIDE);
+                var cube         = new THREE.Mesh(cubeGeom, cubeMaterial);
+                
+                var cubeFaceGeometry = new THREE.PlaneGeometry(2.6, 2.6, 2, 2);
+
+                var cubeWhiteMaterial  = new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide});
+                var cubeGreenMaterial  = new THREE.MeshBasicMaterial({color: 0x009e60, side: THREE.DoubleSide});
+                var cubeBlueMaterial   = new THREE.MeshBasicMaterial({color: 0x0051ba, side: THREE.DoubleSide});
+                var cubeYellowMaterial = new THREE.MeshBasicMaterial({color: 0xffd500, side: THREE.DoubleSide});
+                var cubeOrangeMaterial = new THREE.MeshBasicMaterial({color: 0xff5800, side: THREE.DoubleSide});
+                var cubeRedMaterial    = new THREE.MeshBasicMaterial({color: 0xC41E3A, side: THREE.DoubleSide});
+
+                var cubeWhiteFace  = new THREE.Mesh(cubeFaceGeometry, cubeWhiteMaterial);
+                var cubeGreenFace  = new THREE.Mesh(cubeFaceGeometry, cubeGreenMaterial);
+                var cubeBlueFace   = new THREE.Mesh(cubeFaceGeometry, cubeBlueMaterial);
+                var cubeYellowFace = new THREE.Mesh(cubeFaceGeometry, cubeYellowMaterial);
+                var cubeOrangeFace = new THREE.Mesh(cubeFaceGeometry, cubeOrangeMaterial);
+                var cubeRedFace    = new THREE.Mesh(cubeFaceGeometry, cubeRedMaterial);
+
+                cubeYellowFace.position.z =  CUBE_SIDE * 0.5 + CUBE_OFFSET;
+                cubeGreenFace.position.z  = -CUBE_SIDE * 0.5 - CUBE_OFFSET; 
+                cubeWhiteFace.rotation.x  = -Math.PI / 2; 
+                cubeWhiteFace.position.y  = -CUBE_SIDE * 0.5 - CUBE_OFFSET;
+                cubeBlueFace.rotation.x   = -Math.PI / 2;
+                cubeBlueFace.position.y   =  CUBE_SIDE * 0.5 + CUBE_OFFSET;
+                cubeRedFace.rotation.y    = -Math.PI / 2;
+                cubeRedFace.position.x    = CUBE_SIDE * 0.5 + CUBE_OFFSET;
+                cubeOrangeFace.rotation.y = -Math.PI / 2;
+                cubeOrangeFace.position.x = -CUBE_SIDE * 0.5 - CUBE_OFFSET;
+
+                cube.add(cubeYellowFace);
+                cube.add(cubeGreenFace);
+                cube.add(cubeWhiteFace);
+                cube.add(cubeBlueFace);
+                cube.add(cubeRedFace);
+                cube.add(cubeOrangeFace);
+
+                cube.position.set(x, y, z);
+
+                return cube;
+            }
+
+        </script>
+    </body>
+</html>

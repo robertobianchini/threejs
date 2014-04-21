@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Langto's Ant</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #ffffff;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #000000;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+        <div id="info">Langton's Ant. Use the mouse to manipulate the scene. Made with <a href="http://threejs.org" target="_blank">three.js</a></div>
+
+        <script src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script src="../../../libs/threejs/Dector.js"></script>
+        <script src="../../../libs/threejs/stats.min.js"></script>        
+        <script src="Grid.js"></script>
+
+        <script>
+            var scene;
+            var camera;
+            var cameraControl;
+            var stats;
+            var cells;
+            var rows, columns;
+            var ant = {row: 0, column: 0, direction: 1};
+            var antMaterial;
+            var NORTH = 1, SOUTH = 2,
+                EAST  = 3, WEST  = 4;
+
+
+            function initThreeJS() {
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x001D36, 1);
+ 
+                canvasWidth  = window.innerWidth;
+                canvasHeight = window.innerHeight;
+ 
+                renderer.setSize(canvasWidth, canvasHeight);
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 1, 10000);
+                scene.add(camera);
+            }
+
+
+            function createInteractionGUI() {
+                cameraControl                      = new THREE.TrackballControls(camera);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                // status
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms 
+
+                window.addEventListener('resize', onWindowResize, false);               
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+
+            function createContent() {
+                antMaterial = new THREE.MeshBasicMaterial({color: 0xff0000, side: THREE.DoubleSide});
+                var g       = new Grid(canvasWidth, canvasHeight, 70, 1);
+                cells       = g.grid;
+                rows        = g.rows;
+                columns     = g.columns;
+                for (var i = 0; i < rows; i++) {
+                    for (var j = 0; j < columns; j++) {
+                        cells[i][j].turnOff();
+                        scene.add(cells[i][j].mesh);
+                    }
+                }
+
+                ant.row       = rows / 2;
+                ant.column    = columns / 2;
+                ant.direction = NORTH;
+
+                cells[ant.row][ant.column].setMaterial(antMaterial);
+
+                camera.position.set(g.cameraPos.x, g.cameraPos.y, g.cameraPos.z + 200);
+                camera.lookAt(g.cameraLook); 
+                cameraControl.target = g.cameraLook;
+            }
+
+
+            function animateScene() {
+                update();                
+                draw();
+                requestAnimationFrame(animateScene);                
+            }
+
+
+            function update() {
+                cameraControl.update();
+                evolveSystem();
+                stats.update();                
+            }
+
+
+            function draw() { 
+                renderer.render(scene, camera); 
+            }
+
+
+            function evolveSystem() {
+                if (!cells[ant.row][ant.column].alive) {
+                    cells[ant.row][ant.column].turnOn();
+
+                    switch (ant.direction) {
+                        case NORTH:
+                            ant.column--; 
+                            ant.direction = WEST;
+                        break;
+
+                        case SOUTH:
+                            ant.column++;
+                            ant.direction = EAST;
+                        break;
+
+                        case EAST:
+                            ant.row++;
+                            ant.direction = NORTH;
+                        break;
+
+                        case WEST:
+                            ant.row--;
+                            ant.direction = SOUTH;
+                        break;
+                    }
+                } else {
+                    cells[ant.row][ant.column].turnOff();
+
+                    switch (ant.direction) {
+                        case NORTH:
+                            ant.column++;
+                            ant.direction = EAST;
+                        break;
+
+                        case SOUTH:
+                            ant.column--;
+                            ant.direction = WEST;
+                        break;
+
+                        case EAST:
+                            ant.row--;
+                            ant.direction = SOUTH;
+                        break;
+
+                        case WEST:
+                            ant.row++;
+                            ant.direction = NORTH;
+                        break;
+                    }
+                }
+
+                // Reset if Ant has reached a border
+                if (ant.column < 0 || ant.column >= columns || ant.row < 0 || ant.row >= rows) {
+                    reset();
+                    return;
+                }
+
+                cells[ant.row][ant.column].setMaterial(antMaterial);
+            }
+
+
+            function reset() {
+                for (var i = 0; i < rows; i++) {
+                    for (var j = 0; j < columns; j++) {
+                        cells[i][j].turnOff();
+                    }
+                }
+
+                ant.row       = rows / 2;
+                ant.column    = columns / 2;
+                ant.direction = NORTH;
+
+                cells[rows / 2][columns / 2].setMaterial(antMaterial);
+            }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();
+
+
+        </script>
+    </body>
+</html>

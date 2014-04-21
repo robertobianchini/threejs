@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Learning From Inspirations - Cadioid</title>
+        <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #000000;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #ffffff;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}            
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+
+        <script type="text/javascript" src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script src="../../../libs/threejs/stats.min.js"></script>
+        <script src="../../../libs/threejs/dat.gui.min.js"></script>
+        <script src="../../../libs/threejs/util.js"></script>
+
+        <script type="text/javascript">
+            var renderer, 
+                scene, 
+                camera,
+                clock;
+
+            var group,
+                redDot,
+                redLine,
+                redDotPositions,
+                redCirclesRadius,
+                centralRadius,
+                cardRadius,
+                stepRadius,
+                verticalOffset,
+                centralCircleColor,
+                cardCircleColor,
+                addingPhase,
+                currentCardRadiusIndex,
+                timer,
+                frequency;
+
+            var //cameraControl,
+                stats;
+
+            var PI2 = Math.PI * 2;
+
+            var programStroke = function (context) {
+                context.lineWidth = 0.01;
+                context.beginPath();
+                context.arc(0, 0, 0.5, 0, PI2, true);
+                context.stroke();
+            }
+
+
+            function initThreeJS() {
+                renderer              = new THREE.CanvasRenderer({antialias: true});
+                renderer.sortObjects  = false;
+                renderer.sortElements = false;
+                renderer.setClearColor(0xffffff, 1);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+                scene.add(camera);              
+            }
+
+
+            function createInteractionGUI() {
+                // status
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left     = '0px';
+                stats.domElement.style.top      = '0px';
+                stats.domElement.style.zIndex   = 100;                
+                document.getElementById("WebGLOutput").appendChild(stats.domElement);
+
+                window.addEventListener('resize', onWindowResize, false);
+                document.addEventListener("keydown", onDocumentKeyDown, false); 
+            }
+
+
+            function createContent() {
+                ///////////////////////////////////////////////////////////////////////////////////////////
+                // Simulation
+                clock        = new THREE.Clock();
+                timer        = 0;
+                frequency    = 0.05; // seconds
+
+                ///////////////////////////////////////////
+                // IMPORTANT
+                // These values were based on 32 steps 
+                // to complete a circuit (counter-clockwise) 
+                // starting from 90 degrees
+                ///////////////////////////////////////////
+                stepRadius             = 0.625;
+                stepAngle              = (11.25 * Math.PI) / 180.0;
+                currentAngle           = Math.PI / 2.0;
+                addingPhase            = true;
+                centralCircleColor     = 0x000000;
+                centralRadius          = 4;
+                cardRadius             = 0;
+                currentCardRadiusIndex = 0;
+                cardSign               = 1;
+                cardCircleColor        = 0xff0000;
+
+                redDotPositions  = [];
+                redCirclesRadius = [];
+                for (var i = 0; i < 32; i++) {
+                    var x                   = centralRadius * Math.cos(currentAngle);
+                    var y                   = centralRadius * Math.sin(currentAngle);
+                    currentAngle += stepAngle;
+                    if (currentAngle >= PI2)
+                        currentAngle -= PI2;
+
+                    redDotPositions[i]      = new THREE.Vector2(x, y);
+                    cardRadius              = stepRadius * currentCardRadiusIndex;
+                    redCirclesRadius[i]     = cardRadius;
+                    
+                    currentCardRadiusIndex += cardSign;
+                    if (currentCardRadiusIndex > 15) cardSign = -1;
+                }
+                currentCardRadiusIndex = 0;
+
+                ///////////////////////////////////////////////////////////////////////////////////////////
+                // Main Circle
+                var particle        = new THREE.Sprite(new THREE.SpriteCanvasMaterial({color: centralCircleColor, program: programStroke}));
+                particle.position.x = 0;
+                particle.position.y = 0;
+                particle.position.z = 0;
+                particle.scale.x    = particle.scale.y = 2 * centralRadius;
+                scene.add(particle);
+
+                ///////////////////////////////////////////////////////////////////////////////////////////
+                // Cardiod
+                group = new THREE.Object3D();
+                scene.add(group);
+
+                ///////////////////////////////////////////////////////////////////////////////////////////
+                // Anchor - Red Dot and Line to show current drawing position of the circle
+                var redDotMat = new THREE.MeshBasicMaterial({color: 0xff0000});
+                var redDotGeo = new THREE.SphereGeometry(centralRadius * 0.03);
+                redDot        = new THREE.Mesh(redDotGeo, redDotMat);
+                redDot.position.set(0, centralRadius, 0);
+                scene.add(redDot);
+
+                var redLineMat = new THREE.LineBasicMaterial({color: 0xff0000});
+                var redLineGeo = new THREE.Geometry();
+                redLineGeo.vertices.push(new THREE.Vector3(0, centralRadius, 0));
+                redLineGeo.vertices.push(new THREE.Vector3(0, centralRadius, 0));
+                redLine = new THREE.Line(redLineGeo, redLineMat);
+                scene.add(redLine);
+
+                camera.position.set(0, 0, 40);
+            }
+
+
+            function addCircle(posX, posY, radius) {
+                var circle        = new THREE.Sprite(new THREE.SpriteCanvasMaterial({color: cardCircleColor, program: programStroke}));
+                circle.position.x = posX;
+                circle.position.y = posY;
+                circle.position.z = 0;
+                circle.scale.x    = circle.scale.y = 2 * radius;
+                group.add(circle);
+            }
+
+
+            function popCircle() {
+                if (group.children.length > 0) {
+                    group.remove(group.children[0]);
+                }                
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function onDocumentKeyDown(event) {
+                var keyCode = event.which;
+                if (keyCode == KEY_CODE.S) {   
+
+                }
+            }
+
+
+            function animateScene() {
+                update();
+                draw();
+                requestAnimationFrame(animateScene);                
+            }
+
+
+            function update() {
+                stats.update();
+
+                timer += clock.getDelta();
+                if (timer >= frequency) {
+                    timer = 0;
+                    if (addingPhase) {
+                        redLine.geometry.vertices[1].x = redDot.position.x = redDotPositions[currentCardRadiusIndex].x;
+                        redLine.geometry.vertices[1].y = redDot.position.y = redDotPositions[currentCardRadiusIndex].y;
+                        addCircle(redDotPositions[currentCardRadiusIndex].x, 
+                                  redDotPositions[currentCardRadiusIndex].y, 
+                                  redCirclesRadius[currentCardRadiusIndex]);
+                        currentCardRadiusIndex++;
+                        if (currentCardRadiusIndex > 31) {
+                            addingPhase = false;
+                            currentCardRadiusIndex = 0;
+                        }
+                    } else {
+                        // I should rewrite the code bellow to avoid using so many checks, but
+                        //    it's working (a dirty code) and I want to move on to another thing
+                        if (currentCardRadiusIndex <= 31) {
+                            redLine.geometry.vertices[1].x = redDot.position.x = redDotPositions[currentCardRadiusIndex].x;
+                            redLine.geometry.vertices[1].y = redDot.position.y = redDotPositions[currentCardRadiusIndex].y;
+                        }
+
+                        if (currentCardRadiusIndex > 0) popCircle();
+                        
+                        currentCardRadiusIndex++;
+                        if (currentCardRadiusIndex > 32) {
+                            addingPhase = true;
+                            currentCardRadiusIndex = 0;
+                            redLine.geometry.vertices[1].x = redDot.position.x = redDotPositions[currentCardRadiusIndex].x;
+                            redLine.geometry.vertices[1].y = redDot.position.y = redDotPositions[currentCardRadiusIndex].y;   
+                            currentCardRadiusIndex++;
+                        }
+                    }     
+                }
+            }
+
+
+            function draw() { renderer.render(scene, camera); }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();             
+
+
+        </script>
+    </body>
+</html>

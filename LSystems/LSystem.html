@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>LSystems</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body { background-color : #000000; overflow : hidden; font-family : Monospace; color : white }
+        </style>
+        <script src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/Dector.js"></script>
+        <script src="../../../libs/threejs/dat.gui.min.js"></script>    
+        <script src="SystemDefinitions.js"></script>
+        <script src="LSystem.js"></script>
+        <script src="Turtle.js"></script>
+    </head>
+    <body>
+        <div id="container">
+        <script>
+            var scene;
+            var camera;
+            var lsystem;
+            var turtle;
+
+            var showTurtle = false;
+            var cameraPosZ = 20;
+            
+            var gui;
+            var lSystemControl;
+            var fractalControl;
+            var fassControl;
+            var treeControl;
+            var LSystemControl = function() {
+                this.level       = 1;
+                this.fractals    = KOCH_ISLAND;
+                this.fass        = HILBERT_CURVE;
+                this.trees       = TREE1;
+                this.ShowNextLevel  = function() { 
+                    var snl = lsystem.getNextLevel();
+                    if (snl !== undefined) {
+                        cleanTheScene();
+                        addSystemToScene();
+                        this.level = lsystem.level;
+                    }
+                };
+                this.ShowPreviousLevel  = function() { 
+                    var spl = lsystem.getPreviousLevel();
+                    if (spl !== undefined) {
+                        cleanTheScene();
+                        addSystemToScene();
+                        this.level = lsystem.level;
+                    }                    
+                };                
+            }
+
+            function initializeScene() {
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x000000, 1);
+ 
+                canvasWidth  = window.innerWidth;
+                canvasHeight = window.innerHeight;
+ 
+                renderer.setSize(canvasWidth, canvasHeight);
+                document.getElementById("container").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 1, 2000);
+                camera.position.set(0.5, 0, cameraPosZ);
+                camera.lookAt(scene.position);
+                scene.add(camera);
+                createGUI();
+                createContent(KOCH_ISLAND)
+            }
+
+
+            function createGUI() {
+                lSystemControl = new LSystemControl();
+
+                gui = new dat.GUI();
+                gui.add(lSystemControl, "level", 1).listen();
+
+                fractalControl = gui.add(lSystemControl, "fractals", {KochIsland:          KOCH_ISLAND, 
+                                                                      QuadraticKochIsland: QUADRATIC_KOCH_ISLAND,
+                                                                      QuadraticSnowFlake:  QUADRATIC_SNOW_FLAKE,
+                                                                      IslandLake:          ISLAND_LAKE,
+                                                                      Rings:               RINGS,
+                                                                      Tapestry:            TAPESTRY,
+                                                                      Tiles:               TILES,
+                                                                      Crystal:             CRYSTAL});
+
+                fractalControl.onFinishChange(function(value) { 
+                    if (value == -1) return;
+                    cleanTheScene();
+                    createContent(parseInt(value));
+                });
+
+                fassControl = gui.add(lSystemControl, "fass", {CrossCurve:           CROSS,
+                                                               CrossLight:           CROSS_LIGHT,
+                                                               DragonCurve:          DRAGON_CURVE,
+                                                               SierpinksiArrowHead:  SIERPINSKI_ARROWHEAD,
+                                                               HexagonalGosperCurve: HEXAGONAL_GOSPER_CURVE, 
+                                                               QuadraticGosperCurve: QUADRATIC_GOSPER_CURVE,   
+                                                               PeanoCurve:           PEANO_CURVE,
+                                                               PitagorasCurve:       PITHAGORAS_CURVE,
+                                                               HilbertCurve:         HILBERT_CURVE,   
+                                                               SierpinskiSquare:     SIERPINSKI_SQUARE,
+                                                               KochSnowFlake:        KOCH_SNOW_FLAKE,
+                                                               Triangles:            TRIANG,
+                                                               SierpinskiGasket:     SIERPINSKI_GASKET,});
+                fassControl.onFinishChange(function(value) { 
+                    if (value == -1) return;
+                    cleanTheScene();
+                    createContent(parseInt(value));
+                });
+
+                treeControl = gui.add(lSystemControl, "trees", {Tree1: TREE1, Tree2: TREE2, Tree3: TREE3, Tree4: TREE4, Tree5: TREE5, Tree6: TREE6});
+                treeControl.onFinishChange(function(value) { 
+                    if (value == -1) return;
+                    cleanTheScene();
+                    createContent(parseInt(value));
+                });
+
+                gui.add(lSystemControl, "ShowNextLevel");
+                gui.add(lSystemControl, "ShowPreviousLevel");
+            }
+
+
+            function createContent(systemType) {
+                var systemDefinition = getSystemDefinition(systemType);
+                
+                lsystem = new LSystem(systemDefinition);
+
+                turtle = new Turtle(lsystem);
+                if (showTurtle) scene.add(turtle.turtleMesh);
+
+                addSystemToScene();
+            }
+
+
+            function addSystemToScene() {
+                var lines = turtle.makeSystem();
+                scene.add(lines);
+                camera.position.set(turtle.systemCenter.x, turtle.systemCenter.y, turtle.cameraHeight);
+                lSystemControl.level = turtle.lsystem.level;
+            }
+
+            function cleanTheScene() {
+                turtle.cleanSystem();
+
+                // scene.children[0] is the camera, so stop at i = 1
+                for (var i = scene.children.length - 1; i > 0; i--) {
+                    if (scene.children[i] instanceof THREE.Camera) continue;
+                    scene.remove(scene.children[i]);
+                }
+            }
+
+
+            function animateScene() {
+                requestAnimationFrame(animateScene);
+                renderScene();
+            }
+
+
+            function renderScene() { renderer.render(scene, camera); }
+
+
+            initializeScene();
+            animateScene(); 
+        </script>
+    </body>
+</html>

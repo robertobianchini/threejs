@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Conway's Game of Life</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #ffffff;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #000000;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}            
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+        <div id="info">Game of Life. Use the mouse to manipulate the scene. Made with <a href="http://threejs.org" target="_blank">three.js</a></div>
+
+        <script src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script src="../../../libs/threejs/Dector.js"></script>
+        <script src="../../../libs/threejs/stats.min.js"></script>  
+        <script src="../../../libs/threejs/dat.gui.min.js"></script>  
+        <script src="Grid.js"></script>
+
+        <script>
+            // WebGL and GUI objects
+            var renderer;
+            var scene;
+            var camera;
+            var cameraControl;
+            var stats;
+            var gui;
+            var simControl;
+
+            // Simmulation objects
+            var cells;
+            var cellsBuffer;
+            var cellsStability;
+            var probability = 35;
+            var rows, columns;
+
+            // These variables are used to reset the
+            //   system when it reaches as stable configuration
+            // stabilityCount1 counts the difference between
+            //   live and dead cells between frames and
+            //   when it doesn't change anymore, 
+            //   stabilityCount2 will be increased;
+            //   when it reaches stabilityFactor, 
+            //   the system is rebuilt
+            var stabilityFactor, 
+                stabilityCount1, previousStabilityCount,
+                stabilityCount2;
+
+            // To control the Simmulation via GUI
+            var SimmulationControl = function() {
+                this.Reset = function() {
+                    for (var i = 0; i < rows; i++) {
+                        for (var j = 0; j < columns; j++) {
+                            var random = Math.floor((Math.random() * 100) + 1);
+                            if (random > probability)
+                                cells[i][j].turnOff();
+                            else
+                                cells[i][j].turnOn();
+
+                            cellsBuffer[i][j] = cellsStability[i][j] = cells[i][j].alive;
+                        }
+                    }
+
+                    stabilityCount1        = 0;
+                    stabilityCount2        = 0;
+                    previousStabilityCount = 0;                    
+                }
+            }
+
+
+            function initThreeJS() {
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x001D36, 1);
+ 
+                canvasWidth  = window.innerWidth;
+                canvasHeight = window.innerHeight;
+ 
+                renderer.setSize(canvasWidth, canvasHeight);
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 1, 10000);
+                scene.add(camera);
+            }
+
+
+            function createInteractionGUI() {
+                // Camera
+                cameraControl                      = new THREE.TrackballControls(camera);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                // status
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left     = '0px';
+                stats.domElement.style.top      = '0px';
+                stats.domElement.style.zIndex   = 100;                
+                document.getElementById("WebGLOutput").appendChild(stats.domElement);
+
+                // GUI to Control the Simmulation
+                simControl = new SimmulationControl();
+                gui = new dat.GUI();
+                gui.add(simControl, "Reset").onChange(simControl.Reset);
+
+                document.addEventListener("keydown", onDocumentKeyDown, false); 
+                window.addEventListener('resize', onWindowResize, false);               
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function onDocumentKeyDown(event) {
+                var keyCode = event.which;
+                // S    
+                if (keyCode == 83) {   
+                    console.log("PX = " + camera.position.x + " PY = " + camera.position.y + " PZ = " + camera.position.z);
+                    console.log("RX = " + camera.rotation.x + " RY = " + camera.rotation.y + " RZ = " + camera.rotation.z);
+                }
+            }
+
+
+            function createContent() {
+                var g          = new Grid(canvasWidth, canvasHeight, 50, 3);
+                cells          = g.grid;
+                rows           = g.rows;
+                columns        = g.columns;
+                cellsBuffer    = new Array(rows);
+                cellsStability = new Array(rows);
+
+                for (var i = 0; i < rows; i++) {
+                    cellsBuffer[i]    = new Array(columns);
+                    cellsStability[i] = new Array(columns);
+                    for (var j = 0; j < columns; j++) {
+                        var random = Math.floor((Math.random() * 100) + 1);
+                        if (random > simControl.Probability)
+                            cells[i][j].turnOff();
+                        else
+                            cells[i][j].turnOn();
+
+                        cellsBuffer[i][j] = cellsStability[i][j] = cells[i][j].alive;
+
+                        scene.add(cells[i][j].mesh);
+                    }
+                }
+
+                stabilityFactor        = (rows / columns) * 60;
+                stabilityCount1        = 0;
+                stabilityCount2        = 0;
+                previousStabilityCount = 0;
+
+                camera.position.set(g.cameraPos.x, g.cameraPos.y, g.cameraPos.z + 500);
+                camera.lookAt(g.cameraLook);
+                cameraControl.target = g.cameraLook;
+            }
+
+
+
+            // These variables are used only to constrain the framerate,
+            //  so they are declared here for visibility
+            // var start    = window.animationTime;
+            // var rate     = 10; // Hz
+            // var duration = 10; // s
+            // var lastFrameNumber;
+            function animateScene() {
+                // var elapsed = window.animationTime - start;
+                // if (elapsed < duration) {
+                //     window.requestAnimationFrame(animateScene);
+                // }
+                
+                // var frameNumber = Math.round(elapsed / (1000 / rate));
+                // if (frameNumber == lastFrameNumber) return;
+                  
+                // lastFrameNumber = frameNumber;                
+                
+                update();
+                draw();
+                requestAnimationFrame(animateScene);                
+            }
+            //window.requestAnimationFrame(animateScene);
+
+            function update() {
+                cameraControl.update();
+                evolveSystem();    
+                stats.update();            
+            }
+
+
+            function draw() { renderer.render(scene, camera); }
+
+
+            function evolveSystem() {
+                // Copy the System
+                for (var r = 0; r < rows; r++) {
+                    for (var c = 0; c < columns; c++) {
+                        cellsBuffer[r][c] = cells[r][c].alive;
+                    }
+                }
+
+                // Find the next iteration
+                for (r = 0; r < rows; r++) {
+                    for (c = 0; c < columns; c++)  {
+                        var n = neighbours(r, c);
+                        if (n === 3 && !cellsBuffer[r][c]) 
+                            cellsBuffer[r][c] = true;
+                        else if ((n < 2 || n > 3) && cellsBuffer[r][c])
+                            cellsBuffer[r][c] = false;
+                    }
+                }
+
+                // Copy the array back
+                for (r = 0; r < rows; r++) {
+                    for (c = 0; c < columns; c++) {
+                        if (cellsBuffer[r][c])
+                            cells[r][c].turnOn();
+                        else
+                            cells[r][c].turnOff();
+                    }
+                }
+
+                // Check stability
+                for (r = 0; r < rows; r++) {
+                    for (c = 0; c < columns; c++)  {
+                        if (cellsStability[r][c] !== cells[r][c].alive) {
+                            cellsStability[r][c] = cells[r][c].alive;
+                            stabilityCount1++;
+                        }
+                    }
+                }
+
+                if (stabilityCount1 === previousStabilityCount) {
+                    stabilityCount2++;
+                    if (stabilityCount2 >= stabilityFactor) simControl.Reset();
+                } else
+                    previousStabilityCount = stabilityCount1;
+
+                stabilityCount1 = 0;
+            }
+
+
+            function neighbours(r, c) {
+                var neighbours = 0;
+
+                if (cells[(r + 1) % rows][c].alive)                                  
+                    neighbours++;
+                
+                if (cells[r][(c + 1) % columns].alive)                               
+                    neighbours++;
+                
+                if (cells[(r + rows - 1) % rows][c].alive)                           
+                    neighbours++;
+                
+                if (cells[r][(c + columns - 1) % columns].alive)                     
+                    neighbours++; 
+                
+                if (cells[(r + 1) % rows][(c + 1) % columns].alive)                  
+                    neighbours++; 
+                
+                if (cells[(r + rows - 1) % rows][(c + 1) % columns].alive)           
+                    neighbours++;
+                
+                if (cells[(r + 1) % rows][(c + columns - 1) % columns].alive)        
+                    neighbours++;
+                
+                if (cells[(r + rows - 1) % rows][(c + columns - 1) % columns].alive) 
+                    neighbours++;
+
+                return neighbours;
+            }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();             
+
+        </script>
+    </body>
+</html>

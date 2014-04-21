@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Cellular Automata</title>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #ffffff;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #000000;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}            
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+        <div id="info">1D Cellular Automata. Use the mouse to manipulate the scene. Made with <a href="http://threejs.org" target="_blank">three.js</a></div>
+
+        <script src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script src="../../../libs/threejs/Dector.js"></script>
+        <script src="../../../libs/threejs/stats.min.js"></script>  
+        <script src="../../../libs/threejs/dat.gui.min.js"></script>  
+        <script src="../../../libs/threejs/util.js"></script>        
+        <script src="Grid.js"></script>
+
+        <script>
+            var renderer;
+            var scene;
+            var camera, cameraControl;
+            var stats, gui, simControl;
+            var cells;
+            var rows, columns, currentRow;
+            var rule;
+            var endOfSimmulation;
+
+
+            // To control the Simmulation via GUI
+            var SimmulationControl = function() {
+                this.rule     = 1;
+                this.nextrule = function() {
+                    for (var i = 0; i < rows; i++) {
+                        for (var j = 0; j < columns; j++) {
+                            cells[i][j].turnOff();
+                        }
+                    }
+
+                    cells[Math.floor(rows - 1)][Math.floor(columns / 2)].turnOn();
+                    currentRow = rows - 1;
+                    rule++;
+                    if (rule > 255) rule = 0;
+
+                    this.rule        = rule + 1;
+                    endOfSimmulation = false;
+                }
+
+                this.previousrule = function () {
+                    for (var i = 0; i < rows; i++) {
+                        for (var j = 0; j < columns; j++) {
+                            cells[i][j].turnOff();
+                        }
+                    }
+
+                    cells[Math.floor(rows - 1)][Math.floor(columns / 2)].turnOn();
+                    currentRow = rows - 1;
+                    rule--;
+                    if (rule < 0) rule = 255;
+
+                    this.rule        = rule;
+                    endOfSimmulation = false;                    
+                }
+            }
+
+
+            function initThreeJS() {
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x003461, 1);
+ 
+                canvasWidth  = window.innerWidth;
+                canvasHeight = window.innerHeight;
+ 
+                renderer.setSize(canvasWidth, canvasHeight);
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 1, 10000);
+                scene.add(camera);
+            }
+
+
+            function createInteractionGUI() {
+                // Camera
+                cameraControl                      = new THREE.TrackballControls(camera);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left     = '0px';
+                stats.domElement.style.top      = '0px';
+                stats.domElement.style.zIndex   = 100;                
+                document.getElementById("WebGLOutput").appendChild(stats.domElement);
+
+                // GUI to Control the Simmulation
+                simControl = new SimmulationControl();
+                gui = new dat.GUI();
+                gui.add(simControl, "rule").listen();
+                gui.add(simControl, "nextrule");
+                gui.add(simControl, "previousrule");
+
+                document.addEventListener("keydown", onDocumentKeyDown, false); 
+                window.addEventListener('resize', onWindowResize, false);               
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function onDocumentKeyDown(event) {
+                var keyCode = event.which;
+                if (keyCode == KEY_CODE.P) {
+
+                    console.log("Rule is " + rule);
+                }
+            }
+
+
+            function createContent() {
+                var g            = new Grid(canvasWidth, canvasHeight, 50, 3);
+                cells            = g.grid;
+                rows             = g.rows;
+                columns          = g.columns;
+                currentRow       = rows - 1;
+                endOfSimmulation = false;
+                rule             = 0;
+
+                for (var i = 0; i < rows; i++) {
+                    for (var j = 0; j < columns; j++) {
+                        cells[i][j].turnOff();
+                        scene.add(cells[i][j].mesh);
+                    }
+                }
+                cells[Math.floor(rows - 1)][Math.floor(columns / 2)].turnOn();
+
+                camera.position.set(g.cameraPos.x, g.cameraPos.y, g.cameraPos.z + 500);
+                camera.lookAt(g.cameraLook);
+                cameraControl.target = g.cameraLook;
+            }
+
+
+            function animateScene() {
+                update();
+                draw();
+                requestAnimationFrame(animateScene);                
+            }
+
+
+            function update() {
+                stats.update();
+                cameraControl.update();
+                evolveSystem();
+            }
+
+
+            function draw() { renderer.render(scene, camera); }
+
+
+            function evolveSystem() {
+                if (endOfSimmulation) return;
+
+                for (var j = 0; j < columns; j++) {
+                    var n = neighbours(currentRow, j);
+                    if (n > 0)
+                        cells[currentRow - 1][j].turnOn();
+                    else
+                        cells[currentRow - 1][j].turnOff();
+                }
+
+                currentRow--;
+                if (currentRow <= 0) {
+                    endOfSimmulation = true;
+                    simControl.nextrule();
+                }
+            }
+
+
+            function neighbours(r, c) {
+                var left   = cells[r][(c + columns - 1) % columns].alive ? 1 : 0;
+                var center = cells[r][c].alive ? 1 : 0;
+                var right  = cells[r][(c + 1) % columns].alive ? 1 : 0;
+                var state  = left << 2 | center << 1 | right;
+                if (rule & (1 << state))
+                    return 1;
+                else
+                    return 0;
+            }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();             
+
+        </script>
+    </body>
+</html>

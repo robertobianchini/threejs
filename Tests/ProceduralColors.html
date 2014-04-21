@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Procedural Colors</title>
+        <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #000000;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #ffffff;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}            
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+
+        <script type="text/javascript" src="../../../libs/threejs/three.min.js"></script>
+        <script src="../../../libs/threejs/Dector.js"></script>
+        <script src="../../../libs/threejs/TrackballControls.js"></script>        
+        <script src="../../../libs/threejs/stats.min.js"></script>
+        <script src="../../../libs/threejs/dat.gui.min.js"></script>
+        <script src="../../../libs/threejs/util.js"></script>
+
+        <script type="text/javascript">
+            var renderer, 
+                scene, 
+                camera;
+
+            var cameraControl, 
+                stats;
+
+            var geo,
+                sceneRadius,
+                sphereRadius;
+
+            var ambLight,
+                dirLight,
+                dirLight2;
+
+            var color1, 
+                color2,
+                color3,
+                grayControl;
+
+            var gui,
+                colorControl;
+            var ColorControl = function() {
+                this.color1      = "#ffffff";
+                this.color2      = "#ffffff";
+                this.color3      = "#ffffff";
+                this.grayControl = 0.1;
+
+                this.UpdateColors = function() {
+                    color1      = new THREE.Color(this.color1);
+                    color2      = new THREE.Color(this.color2);
+                    color3      = new THREE.Color(this.color3);
+                    grayControl = this.grayControl;
+                    createObjects(); 
+                };
+            }
+
+            var group;
+
+            var NUMBER_OF_SPHERES = 300;
+
+
+            function initThreeJS() {
+                if(Detector.webgl)
+                    renderer = new THREE.WebGLRenderer({antialias : true});
+                else 
+                    renderer = new THREE.CanvasRenderer();
+                
+                renderer.setClearColor(0x000000, 1);//(0x001D36, 1);
+
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+ 
+                scene  = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+                scene.add(camera);              
+            }
+
+
+            function createInteractionGUI() {
+                cameraControl                      = new THREE.TrackballControls(camera, renderer.domElement);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                // status
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left     = '0px';
+                stats.domElement.style.top      = '0px';
+                stats.domElement.style.zIndex   = 100;                
+                document.getElementById("WebGLOutput").appendChild(stats.domElement);
+
+                colorControl = new ColorControl();
+                gui          = new dat.GUI();
+                gui.addColor(colorControl, "color1").onFinishChange(function(value) { 
+                    color1 = new THREE.Color(colorControl.color1);
+                });
+
+                gui.addColor(colorControl, "color2").onFinishChange(function(value) { 
+                    color2 = new THREE.Color(colorControl.color2);
+                });
+
+                gui.addColor(colorControl, "color3").onFinishChange(function(value) { 
+                    color3 = new THREE.Color(colorControl.color3);
+                });
+
+                gui.add(colorControl, "grayControl", 0.0, 1.0).step(0.1).onFinishChange(function(value) { 
+                    grayControl = colorControl.grayContro;
+                });
+
+                gui.add(colorControl, "UpdateColors");
+
+                window.addEventListener('resize', onWindowResize, false);
+                document.addEventListener("keydown", onDocumentKeyDown, false); 
+            }
+
+
+            function createContent() {
+                sceneRadius  = 2000;
+                sphereRadius = 50;
+
+                color1      = new THREE.Color("rgb(255, 0, 0)");
+                color2      = new THREE.Color("rgb(255, 0, 0)");
+                color3      = new THREE.Color("rgb(0, 0, 255)");
+                grayControl = 0.1;
+
+
+                ambLight = new THREE.AmbientLight(0x404040);
+                scene.add(ambLight);
+
+                dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(1, 1, 1);
+                scene.add(dirLight);
+
+                dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight2.position.set(-1, -1, -1);
+                scene.add(dirLight2);
+
+                geo   = new THREE.SphereGeometry(sphereRadius);
+                group = new THREE.Object3D();
+                scene.add(group);
+
+                createObjects();
+
+                var cameraTarget = new THREE.Vector3(0, 0, 0);
+                camera.position.z = 5000;
+                cameraControl.target = cameraTarget;
+            }
+
+
+            function createObjects() {
+                var i;
+                
+                for (i = group.children.length - 1; i >= 0; i--) group.remove(group.children[i]);
+
+                for (i = 0; i < NUMBER_OF_SPHERES; i++) {
+                    var sphere        = new THREE.Mesh(geo, getRandomMaterial());
+                    sphere.position.x = Math.random() * sceneRadius - sceneRadius * 0.5;
+                    sphere.position.y = Math.random() * sceneRadius - sceneRadius * 0.5;
+                    sphere.position.z = Math.random() * sceneRadius - sceneRadius * 0.5;                    
+                    group.add(sphere);
+                }
+            }
+
+
+            function getRandomMaterial() {
+                var index = Math.floor((Math.random() * 3) + 1);
+
+                var m1 = index == 0 ? Math.random() * grayControl : Math.random();
+                var m2 = index == 1 ? Math.random() * grayControl : Math.random();
+                var m3 = index == 1 ? Math.random() * grayControl : Math.random();
+
+                var summ = m1 + m2 + m3;
+
+                m1 /= summ;
+                m2 /= summ;
+                m3 /= summ;
+
+                // Create a color mixing the other 3
+                var r = color1.r * m1 + color2.r * m2 + color3.r * m3;
+                var g = color1.g * m1 + color2.g * m2 + color3.g * m3;
+                var b = color1.b * m1 + color2.b * m2 + color3.b * m3;
+
+                var c = new THREE.Color();//Math.random() * 0x808080 + 0x808080);
+                c.setRGB(r, g, b);
+
+                return new THREE.MeshPhongMaterial({color: c, 
+                                                    ambient: ambLight.color, 
+                                                    specular: 0x009900, 
+                                                    shininess: 30, 
+                                                    shading: THREE.SmoothShading })                
+            }
+
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function onDocumentKeyDown(event) {
+                var keyCode = event.which;
+                if (keyCode == KEY_CODE.S) {   
+
+                }
+            }
+
+
+            function animateScene() {
+                update();
+                draw();
+                requestAnimationFrame(animateScene);                
+            }
+
+
+            function update() {
+                stats.update();
+                cameraControl.update();                
+            }
+
+
+            function draw() { renderer.render(scene, camera); }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();             
+
+        </script>
+    </body>
+</html>
