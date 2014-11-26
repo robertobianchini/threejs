@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Shaders Lab</title>
+        <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+        <style type="text/css">
+            body {
+                color: #ffffff;
+                font-family: Monospace;
+                font-size: 13px;
+                text-align: center;
+
+                background-color: #ffffff;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                padding: 5px;
+            }
+
+            a {color: #0080ff;}
+        </style>
+    </head>
+    <body>
+        <div id="WebGLOutput"></div>
+        <div id="info">Experiments with Shaders and WebGL. Made with <a href="http://threejs.org" target="_blank">three.js</a></div>
+
+        <script type="text/javascript" src="../../../libs/threejs/three.min.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/Dector.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/TrackballControls.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/stats.min.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/dat.gui.min.js"></script>
+        <script type="text/javascript" src="../../../libs/threejs/util.js"></script>
+
+        <script id="vertexShader" type="x-shader/x-vertex">
+
+            varying vec2 vUv;
+
+            void main() {
+                vUv             = uv;
+                vec4 mvPosition = modelViewMatrix  * vec4(position, 1.0);
+                gl_Position     = projectionMatrix * mvPosition;
+            }
+        </script>
+
+        <script id="fragmentShader" type="x-shader/x-fragment">
+            uniform vec2     resolution;
+            uniform float    mouseX;
+            uniform float    mouseY;
+            uniform float    time;
+            varying vec2     vUv;
+
+            //uniform sample2D texture1;
+
+            // Example From https://www.shadertoy.com/view/MsSSRV
+
+            vec2 cmul(vec2 a, vec2 b) { return a * mat2(b.x, -b.y, b.y, b.x); }
+
+            vec2 cinv(vec2 z) { return vec2(z.x, -z.y) / dot(z, z); }
+
+            vec2 cdiv(vec2 a, vec2 b) { return cmul(a, cinv(b)); }
+
+            vec2 invmobius(vec2 z, vec2 a, vec2 b, vec2 c, vec2 d) { return cdiv(cmul(d, z) - b, a - cmul(c, z)); }
+
+            vec2 map(vec2 p) {
+                float localTime = time * 0.1;
+
+                vec2 t = vec2(sin(localTime), 0.0);
+                vec2 a = vec2(cos(localTime * 5.0), sin(localTime * 5.0));
+                vec2 b = vec2(0.0, 0.0);
+                vec2 c = t * cos(time * 0.25) * 10.0;
+                vec2 d = vec2(1.0, 1.0);
+
+                return invmobius(p, a, b, c, d);
+            }
+
+            void main(void) {
+                vec2 aspect = vec2(resolution.x / resolution.y, 1.0);
+
+                vec2 a = ((gl_FragCoord.xy + vec2(0.0, 0.0)) / resolution.xy * 2.0 - 1.0) * aspect;
+                vec2 b = ((gl_FragCoord.xy + vec2(1.0, 0.0)) / resolution.xy * 2.0 - 1.0) * aspect;
+                vec2 c = ((gl_FragCoord.xy + vec2(1.0, 1.0)) / resolution.xy * 2.0 - 1.0) * aspect;
+                vec2 d = ((gl_FragCoord.xy + vec2(0.0, 1.0)) / resolution.xy * 2.0 - 1.0) * aspect;
+
+                vec2 ma = map(a);
+                vec2 mb = map(b);
+                vec2 mc = map(c);
+                vec2 md = map(d);
+
+                float da = length(mb - ma);
+                float db = length(mc - mb);
+                float dc = length(md - mc);
+                float dd = length(ma - md);
+
+                /* try to anti-alias by flattening the colours when the transformation causes too much stretch */
+                float stretch = max(max(max(da, db), dc), dd);
+                float aa      = 1.0 / (1.0 + stretch * stretch * 1000.0);
+
+                vec2 block  = floor(ma * 10.0 + 0.5);
+                vec2 square = abs(ma - block / 10.0);
+                square     *= aa;
+                float an    = time * 0.1 ;
+                vec2 rot    = cmul(square, vec2(cos(an), sin(an)));
+
+                vec3 r;
+                r.x = (0.5 + sin(rot.x * 100.0 + time * 0.5) * 0.5);
+                r.y = (0.5 + sin(rot.y * 100.0) * 0.5);
+                r.z = (0.5 + sin(square.y * 100.0 + time) * 0.5);
+
+                gl_FragColor = vec4(r, 1.0);
+            }
+        </script>
+
+
+        <script type="text/javascript">
+            var renderer,
+                scene,
+                camera,
+                cameraControl;
+
+            var uniforms,
+                stats,
+                mouseX,
+                mouseY,
+                clock;
+                // timer,
+                // frequency;
+
+
+            function initThreeJS() {
+                renderer = new THREE.WebGLRenderer({antialias: true});
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+                document.getElementById("WebGLOutput").appendChild(renderer.domElement);
+
+                scene             = new THREE.Scene();
+                camera            = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+                scene.add(camera);
+            }
+
+
+            function createInteractionGUI() {
+                cameraControl                      = new THREE.TrackballControls(camera);
+                cameraControl.rotateSpeed          = 1.0;
+                cameraControl.zoomSpeed            = 1.2;
+                cameraControl.panSpeed             = 0.8;
+                cameraControl.noZoom               = false;
+                cameraControl.noPan                = false;
+                cameraControl.staticMoving         = false;
+                cameraControl.dynamicDampingFactor = 0.3;
+
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left     = '0px';
+                stats.domElement.style.top      = '0px';
+                stats.domElement.style.zIndex   = 100;
+                document.getElementById("WebGLOutput").appendChild(stats.domElement);
+
+                window.addEventListener("resize", onWindowResize, false);
+            }
+
+
+            function createContent() {
+                clock        = new THREE.Clock();
+                timer        = 0;
+                frequency    = 0.05; // seconds
+                var geometry = new THREE.BoxGeometry(0.75, 0.75, 0.75);
+                uniforms     = {time:       {type: "f",  value: 1.0},
+                                mouseX:     {type: "f",  value: 0.0},
+                                mouseY:     {type: "f",  value: 0.0},
+                                resolution: {type: "v2", value: new THREE.Vector2()}
+                            //, texture1:   {type: "t",  value: THREE.ImageUtils.loadTexture("textures/lava/cloud.png")}
+                               };
+
+                //uniforms.texture1.value.wrapS = uniforms.texture1.value.wrapT = THREE.RepeatWrapping;
+
+                var material = new THREE.ShaderMaterial({uniforms:       uniforms,
+                                                         vertexShader:   document.getElementById('vertexShader').textContent,
+                                                         fragmentShader: document.getElementById('fragmentShader').textContent});
+                var mesh     = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+
+                var target = new THREE.Vector3(0, 0, 0);
+
+                camera.position.set(0, 0, 2);
+                camera.lookAt(new THREE.Vector3(0, 0, 0));
+                cameraControl.target = new THREE.Vector3(0, 0, 0);
+            }
+
+
+            function onWindowResize() {
+                uniforms.resolution.value.x = window.innerWidth;
+                uniforms.resolution.value.y = window.innerHeight;
+                camera.aspect               = window.innerWidth / window.innerHeight;
+
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+
+            function onDocumentMouseMove(event) {
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            }
+
+
+            function onDocumentKeyDown(event) {
+                var keyCode = event.which;
+                if (keyCode == KEY_CODE.S) {
+
+                }
+            }
+
+
+            function animateScene() {
+                update();
+                draw();
+                requestAnimationFrame(animateScene);
+            }
+
+
+            function update() {
+                stats.update();
+                cameraControl.update();
+
+                uniforms.time.value  += clock.getDelta();//0.05;
+                uniforms.mouseX.value = mouseX;
+                uniforms.mouseY.value = mouseY;
+            }
+
+
+            function draw() { renderer.render(scene, camera); }
+
+
+            initThreeJS();
+            createInteractionGUI();
+            createContent();
+            animateScene();
+
+        // ############################################################################################################
+        //                                              EXAMPLES
+        // ############################################################################################################
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Example from http://glslsandbox.com/e#21079.1
+        // float snoise(vec3 uv, float res) {
+        //     const vec3 s = vec3(1e0, 1e2, 1e3);
+
+        //     uv *= res;
+
+        //     vec3 uv0 = floor(mod(uv, res)) * s;
+        //     vec3 uv1 = floor(mod(uv + vec3(1.0), res)) * s;
+
+        //     vec3 f = fract(uv);
+        //     f     = f * f * (3.0 - 2.0 * f);
+
+        //     vec4 v = vec4(uv0.x + uv0.y + uv0.z, uv1.x + uv0.y + uv0.z,
+        //                   uv0.x + uv1.y + uv0.z, uv1.x + uv1.y + uv0.z);
+
+        //     vec4 r = fract(sin(v * 1e-1) * 1e3);
+        //     float r0 = mix(mix(r.x, r.y, f.x), mix(r.z, r.w, f.x), f.y);
+
+        //     r = fract(sin((v + uv1.z - uv0.z) * 1e-1) * 1e3);
+        //     float r1 = mix(mix(r.x, r.y, f.x), mix(r.z, r.w, f.x), f.y);
+
+        //     return mix(r0, r1, f.z) *2.0 - 1.;
+        // }
+
+
+        // void main() {
+        //     vec2 p = -0.5 + gl_FragCoord.xy / resolution.xy;
+        //     p.x   *= resolution.x/resolution.y;
+
+        //     float color = 4.0 - (4.0 * length(2.0 * p));
+
+        //     vec3 coord = vec3(atan(p.x, p.y) / 6.28, length(p) * 0.4, 0.5);
+
+        //     for(int i = 1; i <= 4; i++) {
+        //         float power = pow(2.0, float(i));
+        //         color += (1.5 / power) * snoise(coord + vec3(0.0, -time * 0.05, time *0.01), power * 18.0);
+        //     }
+
+        //     gl_FragColor = vec4(color, pow(max(color, 0.0), 2.0) * 0.4, pow(max(color, 0.0), 3.0) * 0.15 , 1.0);
+        // }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Example From https://www.shadertoy.com/view/lsBSRd
+        // #define N 20.0
+        // void main() {
+        //     vec2  uv = 2.0 * (gl_FragCoord.xy / resolution.y - vec2(0.9, 0.5));
+        //     float r  = length(uv);
+        //     float a  = atan(uv.y, uv.x);
+        //     float i  = floor(r * N);
+
+        //     a *= floor(pow(128.0, i / N));
+        //     a += 10.0 * time + 123.34 * i;
+        //     r += (0.5 + 0.5 * sin(a)) / N;
+        //     r = floor(N * r) / N;
+
+        //     gl_FragColor = (1.0 - r) * vec4(3.0, 2.0, 1.0, 1.0);
+        // }
+
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Example From http://glslsandbox.com/e#20724.1
+        // void main() {
+        //     vec2 pos     = gl_FragCoord.xy * gl_FragCoord.yx - resolution;
+        //     vec3 color   = vec3(0.0, 0.0, 0.0);
+        //     float factor = (pos.y * sin(time * 1.0 - length(pos) / 10.0)) / (pos.x * cos(time * 1.0 - length(pos) / 10.0));
+
+        //     color.x = factor;
+        //     color.y = factor;
+        //     color.z = factor;
+
+        //     gl_FragColor = vec4(color, 1.0);
+        // }
+        </script>
+    </body>
+</html>
+
+
+
+
+
+
